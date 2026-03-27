@@ -1,12 +1,10 @@
 import os
 import time
 import jinja2
-import yaml
-import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.yaml import yaml_transform
+from apache_beam.yaml import main as yaml_main
 
 def run():
+    # Parameters
     project_id = "jason-hsbc"
     region = "europe-west2"
     
@@ -17,39 +15,44 @@ def run():
     subnet = "regions/europe-west2/subnetworks/subnet-west2"
     service_account = "dataflow-worker-sa-poc@jason-hsbc.iam.gserviceaccount.com"
     
+    # Read the YAML template
     with open("dataflow/pipeline_template.yaml", "r") as f:
         template_str = f.read()
         
+    # Render variables
     template = jinja2.Template(template_str)
     rendered_yaml = template.render(
         input_csv_path=csv_path,
         target_bq_table=target_table
     )
     
-    # Parse the YAML and extract the 'pipeline' block if it exists
-    parsed_yaml = yaml.safe_load(rendered_yaml)
-    if 'pipeline' in parsed_yaml:
-        rendered_yaml = yaml.dump(parsed_yaml['pipeline'])
-    
-    print("Rendered YAML sent to YamlTransform:")
+    print("Rendered top-level YAML:")
     print(rendered_yaml)
     
-    job_name = f"manual-beam-yaml-test-{int(time.time())}"
+    # Save the rendered YAML to a temporary file because yaml_main expects a file path
+    temp_yaml_path = "/tmp/rendered_pipeline.yaml"
+    with open(temp_yaml_path, "w") as f:
+        f.write(rendered_yaml)
+
+    job_name = f"native-beam-yaml-test-{int(time.time())}"
     
-    options = PipelineOptions(
-        runner='DataflowRunner',
-        project=project_id,
-        region=region,
-        temp_location=f'gs://{temp_bucket}/temp',
-        service_account_email=service_account,
-        subnetwork=subnet,
-        job_name=job_name
-    )
+    # Prepare argv for the native top-level YAML parser
+    argv = [
+        "--yaml_pipeline_file=" + temp_yaml_path,
+        "--runner=DataflowRunner",
+        "--project=" + project_id,
+        "--region=" + region,
+        "--temp_location=gs://" + temp_bucket + "/temp",
+        "--service_account_email=" + service_account,
+        "--subnetwork=" + subnet,
+        "--job_name=" + job_name
+    ]
     
-    print(f"Submitting job: {job_name}")
-    with beam.Pipeline(options=options) as p:
-        p | "RunYaml" >> yaml_transform.YamlTransform(rendered_yaml)
-        
+    print(f"Submitting job natively: {job_name}")
+    print("Argv:", argv)
+    
+    # Execute the pipeline using the native Beam YAML entrypoint
+    yaml_main.run(argv)
     print(f"Successfully submitted job {job_name}!")
 
 if __name__ == "__main__":

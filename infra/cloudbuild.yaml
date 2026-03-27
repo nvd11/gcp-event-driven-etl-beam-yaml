@@ -1,0 +1,33 @@
+steps:
+  # 1. Initialize Terraform
+  - name: 'hashicorp/terraform:1.5'
+    entrypoint: 'sh'
+    args: 
+      - '-c'
+      - |
+        echo "Initializing Terraform..."
+        terraform init
+    dir: 'infra'
+
+  # 2. Terraform Plan
+  - name: 'hashicorp/terraform:1.5'
+    entrypoint: 'sh'
+    args: 
+      - '-c'
+      - |
+        echo "Running Terraform Plan..."
+        terraform plan -out=tfplan
+    dir: 'infra'
+
+  # 3. Terraform Apply (auto-approve the saved plan)
+  - name: 'hashicorp/terraform:1.5'
+    entrypoint: 'sh'
+    args: 
+      - '-c'
+      - |
+        echo "Running Terraform Apply..."
+        terraform apply -auto-approve tfplan
+    dir: 'infra'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

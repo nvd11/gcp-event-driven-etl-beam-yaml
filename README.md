@@ -94,17 +94,26 @@ sequenceDiagram
 ---
 
 ## 4. 权限隔离与安全性 (IAM & Security)
-为保证生产环境的最小权限原则 (Least Privilege)，架构中需要严格的角色划分：
-1.  **GCS 专属服务账号**：系统自动生成的 Storage Service Account，需具备 `roles/pubsub.publisher` 权限以发布 Notification。
-2.  **Pub/Sub Push 身份**：Push Subscription 调用 Cloud Run 时，需关联一个具备 `roles/run.invoker` 权限的服务账号。
-3.  **Cloud Run 服务账号 (Orchestrator SA)**：
-    *   读取 YAML Bucket (`roles/storage.objectViewer`)
-    *   作为 Job Submitter 向 Dataflow 提交任务 (`roles/dataflow.developer`)
-    *   能够扮演 (ActAs) Dataflow Worker 账号 (`roles/iam.serviceAccountUser`)
-4.  **Dataflow Worker 服务账号**：Dataflow 虚拟机集群实际运行时的身份：
-    *   读取 Landing Bucket 数据 (`roles/storage.objectViewer`)
-    *   写入 BigQuery 表 (`roles/bigquery.dataEditor`, `roles/bigquery.jobUser`)
-    *   写入临时/暂存 Bucket (`roles/storage.objectAdmin`)
+为保证生产环境的最小权限原则 (Least Privilege)，架构中需要严格的角色划分，我们将在 Terraform (`./infra`) 中明确创建和配置以下 Service Accounts (SA)：
+
+1.  **GCS 专属服务账号 (Google-managed Storage SA)**：
+    *   **命名示例**: `service-[PROJECT_NUMBER]@gs-project-accounts.iam.gserviceaccount.com` (系统自动生成)
+    *   **权限需求**: 需具备 `roles/pubsub.publisher` 权限，以允许 GCS 桶在发生事件时向指定的 Pub/Sub Topic 发送 Notification。
+2.  **Pub/Sub Push 调用身份 (`pubsub-invoker-sa`)**：
+    *   **命名设计**: `pubsub-invoker-sa@[PROJECT_ID].iam.gserviceaccount.com`
+    *   **权限需求**: 需关联到 Push Subscription，具备 `roles/run.invoker` 权限，以便合法触发 Cloud Run 的 HTTP Webhook。
+3.  **Cloud Run 编排服务账号 (`cloudrun-orchestrator-sa`)**：
+    *   **命名设计**: `cloudrun-orchestrator-sa@[PROJECT_ID].iam.gserviceaccount.com`
+    *   **权限需求**:
+        *   读取 YAML Bucket 以获取流水线模板 (`roles/storage.objectViewer`)
+        *   作为 Job Submitter 向 Dataflow 提交作业 (`roles/dataflow.developer`)
+        *   必须能够扮演 (ActAs) 下方的 Dataflow Worker 账号，以拉起计算资源 (`roles/iam.serviceAccountUser` 绑定到 `dataflow-worker-sa` 身上)
+4.  **Dataflow Worker 计算服务账号 (`dataflow-worker-sa`)**：
+    *   **命名设计**: `dataflow-worker-sa@[PROJECT_ID].iam.gserviceaccount.com`
+    *   **权限需求**: 这是 Dataflow Compute Engine 虚拟机集群实际运行时的身份，专注于数据面：
+        *   读取 Landing Bucket 中的 CSV 数据 (`roles/storage.objectViewer`)
+        *   写入数据和 Job 状态到 BigQuery (`roles/bigquery.dataEditor`, `roles/bigquery.jobUser`)
+        *   写入 Dataflow 临时/暂存 Bucket (`roles/storage.objectAdmin`, 或者是特定的 temp bucket 访问权限)
 
 ## 5. 扩展性与未来演进 (Extensibility)
 *   **动态 Schema 推断**：Beam YAML 的 `ReadFromCsv` 支持自动推断 Schema 并直接建表，非常适合结构易变的数据接入。

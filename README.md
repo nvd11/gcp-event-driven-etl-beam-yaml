@@ -99,17 +99,17 @@ sequenceDiagram
 1.  **GCS 专属服务账号 (Google-managed Storage SA)**：
     *   **命名示例**: `service-[PROJECT_NUMBER]@gs-project-accounts.iam.gserviceaccount.com` (系统自动生成)
     *   **权限需求**: 需具备 `roles/pubsub.publisher` 权限，以允许 GCS 桶在发生事件时向指定的 Pub/Sub Topic 发送 Notification。
-2.  **Pub/Sub Push 调用身份 (`pubsub-invoker-sa`)**：
-    *   **命名设计**: `pubsub-invoker-sa@[PROJECT_ID].iam.gserviceaccount.com`
+2.  **Pub/Sub Push 调用身份 (`pubsub-invoker-sa-poc`)**：
+    *   **命名设计**: `pubsub-invoker-sa-poc@[PROJECT_ID].iam.gserviceaccount.com`
     *   **权限需求**: 需关联到 Push Subscription，具备 `roles/run.invoker` 权限，以便合法触发 Cloud Run 的 HTTP Webhook。
-3.  **Cloud Run 编排服务账号 (`cloudrun-orchestrator-sa`)**：
-    *   **命名设计**: `cloudrun-orchestrator-sa@[PROJECT_ID].iam.gserviceaccount.com`
+3.  **Cloud Run 编排服务账号 (`cloudrun-orchestrator-sa-poc`)**：
+    *   **命名设计**: `cloudrun-orchestrator-sa-poc@[PROJECT_ID].iam.gserviceaccount.com`
     *   **权限需求**:
         *   读取 YAML Bucket 以获取流水线模板 (`roles/storage.objectViewer`)
         *   作为 Job Submitter 向 Dataflow 提交作业 (`roles/dataflow.developer`)
-        *   必须能够扮演 (ActAs) 下方的 Dataflow Worker 账号，以拉起计算资源 (`roles/iam.serviceAccountUser` 绑定到 `dataflow-worker-sa` 身上)
-4.  **Dataflow Worker 计算服务账号 (`dataflow-worker-sa`)**：
-    *   **命名设计**: `dataflow-worker-sa@[PROJECT_ID].iam.gserviceaccount.com`
+        *   必须能够扮演 (ActAs) 下方的 Dataflow Worker 账号，以拉起计算资源 (`roles/iam.serviceAccountUser` 绑定到 `dataflow-worker-sa-poc` 身上)
+4.  **Dataflow Worker 计算服务账号 (`dataflow-worker-sa-poc`)**：
+    *   **命名设计**: `dataflow-worker-sa-poc@[PROJECT_ID].iam.gserviceaccount.com`
     *   **权限需求**: 这是 Dataflow Compute Engine 虚拟机集群实际运行时的身份，专注于数据面：
         *   读取 Landing Bucket 中的 CSV 数据 (`roles/storage.objectViewer`)
         *   写入数据和 Job 状态到 BigQuery (`roles/bigquery.dataEditor`, `roles/bigquery.jobUser`)

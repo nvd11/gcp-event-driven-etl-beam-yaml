@@ -1,0 +1,22 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "1. Discovering YAML Bucket created by Terraform..."
+        YAML_BUCKET=$$(gcloud storage ls --project=jason-hsbc | grep etl-yaml-bucket-poc | head -n 1)
+        
+        if [ -z "$$YAML_BUCKET" ]; then
+          echo "Error: Could not find any bucket matching 'etl-yaml-bucket-poc'"
+          exit 1
+        fi
+        
+        echo "Found target YAML Bucket: $$YAML_BUCKET"
+        
+        echo "2. Uploading Dataflow Beam YAML template..."
+        gcloud storage cp dataflow/pipeline_template.yaml $$YAML_BUCKET
+
+serviceAccount: 'projects/jason-hsbc/serviceAccounts/terraform@jason-hsbc.iam.gserviceaccount.com'
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,6 +1,6 @@
 terraform {
   backend "gcs" {
     bucket = "jason-hsbc"
-    prefix = "terraform/state/gcp-event-driven-etl-beam-yaml"
+    prefix = "terraform/state/poc/gcp-event-driven-etl-beam-yaml"
   }
 }

@@ -32,6 +32,7 @@ steps:
       - '--port'
       - '8080'
       - '--allow-unauthenticated'
+      - '--update-secrets=/app/secrets/sa-key.json=sa-key-terraform:1'
 
 # Define images to be pushed automatically by Cloud Build
 images:

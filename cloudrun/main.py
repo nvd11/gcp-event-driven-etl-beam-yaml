@@ -11,17 +11,27 @@ class TriggerRequest(BaseModel):
     project: str
     region: str
     temp_location: str
+    service_account_email: str
     job_name: str = "yaml-dynamic-job"
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
-def run_beam_sync(yaml_config: str, project: str, region: str, temp_location: str, job_name: str):
+def run_beam_sync(yaml_config: str, project: str, region: str, temp_location: str, service_account_email: str, job_name: str):
     fd, tmp_path = tempfile.mkstemp(suffix='.yaml', text=True)
     with os.fdopen(fd, 'w') as tmp:
         tmp.write(yaml_config)
     try:
+        # Load service account credentials from the mounted volume
+        sa_key_path = "/app/secrets/sa-key.json"
+        
+        # We need to construct the environment for the subprocess explicitly
+        # to ensure GOOGLE_APPLICATION_CREDENTIALS points to our SA key.
+        env = os.environ.copy()
+        if os.path.exists(sa_key_path):
+            env["GOOGLE_APPLICATION_CREDENTIALS"] = sa_key_path
+        
         cmd = [
             "python", "-m", "apache_beam.yaml.main",
             f"--yaml_pipeline_file={tmp_path}",
@@ -29,12 +39,13 @@ def run_beam_sync(yaml_config: str, project: str, region: str, temp_location: st
             f"--project={project}",
             f"--region={region}",
             f"--temp_location={temp_location}",
+            f"--service_account_email={service_account_email}",
             f"--job_name={job_name}"
         ]
         print(f"Starting Dataflow job {job_name} submission...")
         # Add timeout to ensure it doesn't hang indefinitely (15 minutes max)
         # Use capture_output to avoid filling stdout/stderr buffers leading to hangs
-        subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=900, env=env)
         print(f"Dataflow job {job_name} submission completed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error submitting Dataflow job {job_name}. Exit code: {e.returncode}")
@@ -56,6 +67,7 @@ async def trigger_pipeline(req: TriggerRequest, background_tasks: BackgroundTask
         req.project, 
         req.region, 
         req.temp_location, 
+        req.service_account_email, 
         req.job_name
     )
     return {

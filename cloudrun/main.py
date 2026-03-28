@@ -1,7 +1,7 @@
 import os
 import subprocess
 import tempfile
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI(title="Beam YAML Orchestrator", description="Service to trigger Dataflow pipelines from Top-Level YAML.")
@@ -17,37 +17,43 @@ class TriggerRequest(BaseModel):
 def health_check():
     return {"status": "healthy"}
 
-@app.post("/trigger")
-def trigger_pipeline(req: TriggerRequest):
-    # Use subprocess but with Popen to NOT block the return
+def run_beam_sync(yaml_config: str, project: str, region: str, temp_location: str, job_name: str):
     fd, tmp_path = tempfile.mkstemp(suffix='.yaml', text=True)
     with os.fdopen(fd, 'w') as tmp:
-        tmp.write(req.yaml_config)
-
+        tmp.write(yaml_config)
     try:
         cmd = [
             "python", "-m", "apache_beam.yaml.main",
             f"--yaml_pipeline_file={tmp_path}",
             "--runner=DataflowRunner",
-            f"--project={req.project}",
-            f"--region={req.region}",
-            f"--temp_location={req.temp_location}",
-            f"--job_name={req.job_name}"
+            f"--project={project}",
+            f"--region={region}",
+            f"--temp_location={temp_location}",
+            f"--job_name={job_name}"
         ]
-        
-        # Fire and forget
-        # We don't wait for stdout, the job submission will happen in the background
-        # Cloud Run needs to know we intend it to outlive the response if it takes a while,
-        # but Dataflow submission only takes ~15 seconds. If Cloud Run freezes the CPU,
-        # it will thaw on the next request. For a proper async fire-and-forget in FastAPI:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        return {
-            "status": "success",
-            "message": f"Pipeline submission initiated in background."
-        }
-        
+        # DataflowRunner itself does not block until completion by default unless wait_until_finish is True.
+        # But wait, apache_beam.yaml.main does not explicitly pass wait_until_finish.
+        # Let's run it synchronously so we get the Job ID output, it should finish in 10-30s once DAG is parsed.
+        print(f"Starting Dataflow job {job_name} submission...")
+        subprocess.run(cmd, check=True)
+        print(f"Dataflow job {job_name} submission completed.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    # We deliberately leak the tmp_path here because the background process needs it.
-    # A background cron can clean up /tmp.
+        print(f"Error submitting Dataflow job {job_name}: {e}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+@app.post("/trigger")
+async def trigger_pipeline(req: TriggerRequest, background_tasks: BackgroundTasks):
+    background_tasks.add_task(
+        run_beam_sync, 
+        req.yaml_config, 
+        req.project, 
+        req.region, 
+        req.temp_location, 
+        req.job_name
+    )
+    return {
+        "status": "success",
+        "message": f"Pipeline submission for {req.job_name} initiated in background."
+    }

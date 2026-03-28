@@ -39,4 +39,4 @@ images:
 # Default substitution values (can be overridden during build trigger)
 substitutions:
   _REGION: 'europe-west2'
-  _AR_REPO_NAME: 'dataflow-containers' # IMPORTANT: Needs to be a valid Artifact Registry repo name
+  _AR_REPO_NAME: 'my-docker-repo'

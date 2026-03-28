@@ -106,8 +106,14 @@ options:
             f"--service_account_email={service_account_email}",
             f"--job_name={job_name}"
         ]
+        
+        # Explicitly trust the system certs for requests inside the subprocess
+        env = os.environ.copy()
+        env["REQUESTS_CA_BUNDLE"] = "/etc/ssl/certs/ca-certificates.crt"
+        env["SSL_CERT_FILE"] = "/etc/ssl/certs/ca-certificates.crt"
+        
         print(f"Starting Dataflow job {job_name} submission...")
-        subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=900, env=env)
         print(f"Dataflow job {job_name} submission completed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error submitting Dataflow job {job_name}. Exit code: {e.returncode}")

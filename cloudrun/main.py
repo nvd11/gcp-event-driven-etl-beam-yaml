@@ -31,7 +31,7 @@ def trigger_pipeline(req: TriggerRequest):
         # 组装命令：我们采用 Option B 方案，直接调用 apache_beam.yaml.main
         cmd = [
             "python", "-m", "apache_beam.yaml.main",
-            f"--yaml_file={tmp_path}",
+            f"--yaml_pipeline_file={tmp_path}",
             "--runner=DataflowRunner",
             f"--project={req.project}",
             f"--region={req.region}",

@@ -6,7 +6,7 @@ steps:
       - '-t'
       - 'gcr.io/$PROJECT_ID/beam-yaml-orchestrator:$COMMIT_SHA'
       # Set build context to the orchestrator directory
-      - './orchestrator'
+      - './cloudrun'
 
   # Step 2: Push the image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'

@@ -1,18 +1,17 @@
 import os
+import subprocess
 import tempfile
-import apache_beam as beam
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from apache_beam.yaml.main import build_pipeline_components_from_argv
 
 app = FastAPI(title="Beam YAML Orchestrator", description="Service to trigger Dataflow pipelines from Top-Level YAML.")
 
 class TriggerRequest(BaseModel):
-    yaml_config: str      # 包含整个 Top-Level YAML 的字符串
-    project: str          # GCP Project ID
-    region: str           # e.g., us-central1
-    temp_location: str    # e.g., gs://my-bucket/temp
-    job_name: str = "yaml-dynamic-job" # Dataflow 作业名称
+    yaml_config: str
+    project: str
+    region: str
+    temp_location: str
+    job_name: str = "yaml-dynamic-job"
 
 @app.get("/health")
 def health_check():
@@ -20,17 +19,14 @@ def health_check():
 
 @app.post("/trigger")
 def trigger_pipeline(req: TriggerRequest):
-    """
-    接收一个完整的 YAML 字符串参数，不使用 subprocess 阻塞等待作业完成，
-    而是直接通过 Beam SDK 解析并异步提交给 Dataflow。
-    """
+    # Use subprocess but with Popen to NOT block the return
     fd, tmp_path = tempfile.mkstemp(suffix='.yaml', text=True)
     with os.fdopen(fd, 'w') as tmp:
         tmp.write(req.yaml_config)
 
     try:
-        # 使用最新的 yaml_pipeline_file 参数
-        argv = [
+        cmd = [
+            "python", "-m", "apache_beam.yaml.main",
             f"--yaml_pipeline_file={tmp_path}",
             "--runner=DataflowRunner",
             f"--project={req.project}",
@@ -39,30 +35,19 @@ def trigger_pipeline(req: TriggerRequest):
             f"--job_name={req.job_name}"
         ]
         
-        # 提取解析器组件
-        options, constructor, display_data = build_pipeline_components_from_argv(argv)
-        
-        # 构建 Pipeline
-        p = beam.Pipeline(options=options, display_data=display_data)
-        constructor(p)
-        
-        # 异步提交！不要使用 'with beam.Pipeline()'，因为 with 会阻塞 Cloud Run 长达数小时，导致 504 Timeout。
-        # 调用 p.run() 会返回一个 PipelineResult 对象。
-        result = p.run()
-        
-        job_id = result.job_id() if hasattr(result, 'job_id') else "unknown"
+        # Fire and forget
+        # We don't wait for stdout, the job submission will happen in the background
+        # Cloud Run needs to know we intend it to outlive the response if it takes a while,
+        # but Dataflow submission only takes ~15 seconds. If Cloud Run freezes the CPU,
+        # it will thaw on the next request. For a proper async fire-and-forget in FastAPI:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         return {
             "status": "success",
-            "message": f"Pipeline '{req.job_name}' submitted successfully.",
-            "job_id": job_id
+            "message": f"Pipeline submission initiated in background."
         }
         
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to submit pipeline: {str(e)}"
-        )
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        raise HTTPException(status_code=500, detail=str(e))
+    # We deliberately leak the tmp_path here because the background process needs it.
+    # A background cron can clean up /tmp.

@@ -4,7 +4,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/etl-orchestrator-svc-poc:$COMMIT_SHA'
       # Set build context to the cloudrun directory
       - './cloudrun'
 
@@ -12,7 +12,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/etl-orchestrator-svc-poc:$COMMIT_SHA'
 
   # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -20,9 +20,9 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'beam-yaml-orchestrator'
+      - 'etl-orchestrator-svc-poc'
       - '--image'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/etl-orchestrator-svc-poc:$COMMIT_SHA'
       - '--region'
       - '$_REGION'
       # Crucial for Option B: Beam SDK parsing DAG in memory requires more RAM.
@@ -32,13 +32,18 @@ steps:
       - '--port'
       - '8080'
       - '--allow-unauthenticated'
-      - '--update-secrets=/app/secrets/sa-key.json=sa-key-terraform:1'
+      - '--service-account=terraform@jason-hsbc.iam.gserviceaccount.com'
 
 # Define images to be pushed automatically by Cloud Build
 images:
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/etl-orchestrator-svc-poc:$COMMIT_SHA'
 
 # Default substitution values (can be overridden during build trigger)
 substitutions:
   _REGION: 'europe-west2'
   _AR_REPO_NAME: 'my-docker-repo'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: "projects/jason-hsbc/serviceAccounts/terraform@jason-hsbc.iam.gserviceaccount.com"

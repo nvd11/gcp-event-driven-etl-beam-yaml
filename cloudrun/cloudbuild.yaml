@@ -4,15 +4,15 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/beam-yaml-orchestrator:$COMMIT_SHA'
-      # Set build context to the orchestrator directory
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
+      # Set build context to the cloudrun directory
       - './cloudrun'
 
-  # Step 2: Push the image to Google Container Registry
+  # Step 2: Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'gcr.io/$PROJECT_ID/beam-yaml-orchestrator:$COMMIT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
 
   # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -22,24 +22,21 @@ steps:
       - 'deploy'
       - 'beam-yaml-orchestrator'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/beam-yaml-orchestrator:$COMMIT_SHA'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
       - '--region'
       - '$_REGION'
       # Crucial for Option B: Beam SDK parsing DAG in memory requires more RAM.
-      # Minimum 1Gi, safely set to 2Gi to avoid OOM errors.
       - '--memory'
       - '2Gi'
-      # Cloud Run expects the app to listen on the port defined by the PORT env var.
       - '--port'
       - '8080'
-      # Security: If triggered by Pub/Sub or internal services, remove '--allow-unauthenticated'
-      # and handle IAM appropriately.
       - '--allow-unauthenticated'
 
 # Define images to be pushed automatically by Cloud Build
 images:
-  - 'gcr.io/$PROJECT_ID/beam-yaml-orchestrator:$COMMIT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO_NAME/beam-yaml-orchestrator:$COMMIT_SHA'
 
 # Default substitution values (can be overridden during build trigger)
 substitutions:
-  _REGION: 'us-central1'
+  _REGION: 'europe-west2'
+  _AR_REPO_NAME: 'dataflow-containers' # IMPORTANT: Needs to be a valid Artifact Registry repo name

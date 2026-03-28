@@ -1,9 +1,14 @@
 FROM python:3.12-slim
 
 # Install system dependencies if required by native extensions for gRPC / Beam
+# Also install Java (default-jre-headless) because Apache Beam YAML WriteToBigQuery requires cross-language Java provider
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates \
+    build-essential ca-certificates default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME (usually /usr/lib/jvm/default-java on Debian-based slim images)
+ENV JAVA_HOME=/usr/lib/jvm/default-java
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 WORKDIR /app
 

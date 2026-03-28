@@ -31,14 +31,19 @@ def run_beam_sync(yaml_config: str, project: str, region: str, temp_location: st
             f"--temp_location={temp_location}",
             f"--job_name={job_name}"
         ]
-        # DataflowRunner itself does not block until completion by default unless wait_until_finish is True.
-        # But wait, apache_beam.yaml.main does not explicitly pass wait_until_finish.
-        # Let's run it synchronously so we get the Job ID output, it should finish in 10-30s once DAG is parsed.
         print(f"Starting Dataflow job {job_name} submission...")
-        subprocess.run(cmd, check=True)
-        print(f"Dataflow job {job_name} submission completed.")
+        # Add timeout to ensure it doesn't hang indefinitely (15 minutes max)
+        # Use capture_output to avoid filling stdout/stderr buffers leading to hangs
+        subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+        print(f"Dataflow job {job_name} submission completed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error submitting Dataflow job {job_name}. Exit code: {e.returncode}")
+        print(f"STDOUT: {e.stdout.decode('utf-8', errors='ignore')}")
+        print(f"STDERR: {e.stderr.decode('utf-8', errors='ignore')}")
+    except subprocess.TimeoutExpired as e:
+        print(f"Timeout submitting Dataflow job {job_name} after {e.timeout} seconds.")
     except Exception as e:
-        print(f"Error submitting Dataflow job {job_name}: {e}")
+        print(f"Unexpected error submitting Dataflow job {job_name}: {e}")
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)

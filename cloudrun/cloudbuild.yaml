@@ -28,6 +28,7 @@ steps:
       # Crucial for Option B: Beam SDK parsing DAG in memory requires more RAM.
       - '--memory'
       - '2Gi'
+      - '--no-cpu-throttling'
       - '--port'
       - '8080'
       - '--allow-unauthenticated'

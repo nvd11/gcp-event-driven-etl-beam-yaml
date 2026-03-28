@@ -63,11 +63,9 @@ def process_pubsub_event(event_data: dict):
   type: chain
   transforms:
     - type: ReadFromCsv
-      name: ReadLandingCSV
       config:
         path: "{{ input_csv_path }}"
     - type: WriteToBigQuery
-      name: WriteToBQ
       config:
         table: "{{ target_bq_table }}"
         create_disposition: CREATE_IF_NEEDED

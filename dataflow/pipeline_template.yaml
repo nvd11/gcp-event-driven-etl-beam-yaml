@@ -9,6 +9,5 @@ pipeline:
         table: "{{ target_bq_table }}"
         create_disposition: "CREATE_IF_NEEDED"
         write_disposition: "WRITE_APPEND"
-        schema: "id:INTEGER,name:STRING"
 options:
   subnetwork: "{{ subnetwork }}"

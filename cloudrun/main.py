@@ -28,8 +28,6 @@ def process_pubsub_event(event_data: dict):
 
     input_csv_path = f"gs://{bucket}/{name}"
     
-    # In a real scenario, table routing could be dynamic based on filename.
-    # We will just route to a default test table based on the filename prefix or project defaults.
     project_id = os.environ.get("PROJECT_ID", "jason-hsbc")
     region = os.environ.get("REGION", "europe-west2")
     yaml_bucket_name = os.environ.get("YAML_BUCKET")
@@ -37,19 +35,14 @@ def process_pubsub_event(event_data: dict):
     subnetwork = os.environ.get("SUBNETWORK", "regions/europe-west2/subnetworks/tf-vpc0-subnet0")
     service_account_email = os.environ.get("DATAFLOW_WORKER_SA", "terraform@jason-hsbc.iam.gserviceaccount.com")
     
-    # If environment variables aren't injected (e.g. running outside TF context), use sensible defaults for testing
     if not yaml_bucket_name:
-        # Fallback if TF vars not fully populated, or fetch from a known state
-        print("Warning: YAML_BUCKET env var not set. Ensure Terraform infra is applied and vars are populated.")
-        # We'll mock it for the test if it fails
         yaml_bucket_name = "your-yaml-bucket-name" 
         
-    target_bq_table = f"{project_id}:landing_dataset.csv_landing_table"
+    target_bq_table = f"{project_id}:etl_poc_dataset.csv_landing_table"
 
     print(f"Processing file: {input_csv_path}")
     print(f"Target BQ table: {target_bq_table}")
 
-    # 1. Download YAML Template
     storage_client = storage.Client()
     try:
         yaml_bucket = storage_client.bucket(yaml_bucket_name)
@@ -57,8 +50,6 @@ def process_pubsub_event(event_data: dict):
         yaml_template_content = blob.download_as_text()
     except Exception as e:
         print(f"Error downloading YAML template from gs://{yaml_bucket_name}/pipeline_template.yaml: {e}")
-        # As a fallback for our testing so it doesn't crash if the bucket isn't set up yet:
-        print("Using fallback dummy YAML template for testing...")
         yaml_template_content = """pipeline:
   type: chain
   transforms:
@@ -74,7 +65,6 @@ options:
   subnetwork: "{{ subnetwork }}"
 """
         
-    # 2. Render Template with Jinja2
     template = jinja2.Template(yaml_template_content)
     rendered_yaml = template.render(
         input_csv_path=input_csv_path,
@@ -85,7 +75,6 @@ options:
     print("Rendered YAML Config:")
     print(rendered_yaml)
 
-    # 3. Save to temp file
     fd, tmp_path = tempfile.mkstemp(suffix='.yaml', text=True)
     with os.fdopen(fd, 'w') as tmp:
         tmp.write(rendered_yaml)
@@ -105,7 +94,6 @@ options:
             f"--job_name={job_name}"
         ]
         
-        # Explicitly trust the system certs for requests inside the subprocess
         env = os.environ.copy()
         env["REQUESTS_CA_BUNDLE"] = "/etc/ssl/certs/ca-certificates.crt"
         env["SSL_CERT_FILE"] = "/etc/ssl/certs/ca-certificates.crt"
@@ -123,36 +111,21 @@ options:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-
 @app.post("/pubsub")
 async def pubsub_webhook(request: Request, background_tasks: BackgroundTasks):
-    """
-    Receives Pub/Sub push messages containing GCS object.finalize events.
-    """
     try:
         envelope = await request.json()
         if not envelope or "message" not in envelope:
             raise HTTPException(status_code=400, detail="Invalid Pub/Sub message format")
-        
         pubsub_message = envelope["message"]
-        
         if isinstance(pubsub_message, dict) and "data" in pubsub_message:
-            # Decode the base64 data which contains the GCS event payload
             event_data_str = base64.b64decode(pubsub_message["data"]).decode("utf-8").strip()
             event_data = json.loads(event_data_str)
-            
             print(f"Received Pub/Sub event for GCS object: {event_data.get('name')}")
-            
-            # Offload the heavy Dataflow parsing and submission to a background task
-            # so we can immediately return 200 OK to Pub/Sub to prevent retries.
             background_tasks.add_task(process_pubsub_event, event_data)
-            
             return {"status": "success", "message": "Event received and processing initiated"}
         else:
             raise HTTPException(status_code=400, detail="Invalid Pub/Sub message payload")
-            
     except Exception as e:
         print(f"Error processing webhook: {e}")
-        # Return 200 anyway so Pub/Sub doesn't infinitely retry malformed messages,
-        # or return 500 if we want it to retry transient errors.
         raise HTTPException(status_code=500, detail=str(e))

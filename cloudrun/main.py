@@ -38,7 +38,7 @@ def process_pubsub_event(event_data: dict):
     if not yaml_bucket_name:
         yaml_bucket_name = "your-yaml-bucket-name" 
         
-    target_bq_table = f"{project_id}:etl_poc_dataset.csv_landing_table"
+    target_bq_table = f"{project_id}:etl_poc_dataset.target_users_poc"
 
     print(f"Processing file: {input_csv_path}")
     print(f"Target BQ table: {target_bq_table}")

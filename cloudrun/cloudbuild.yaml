@@ -32,7 +32,6 @@ steps:
       - '--port'
       - '8080'
       - '--allow-unauthenticated'
-      - '--service-account=terraform@jason-hsbc.iam.gserviceaccount.com'
 
 # Define images to be pushed automatically by Cloud Build
 images:
@@ -45,5 +44,3 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
-serviceAccount: "projects/jason-hsbc/serviceAccounts/terraform@jason-hsbc.iam.gserviceaccount.com"

@@ -18,12 +18,12 @@ resource "google_bigquery_table" "target_table" {
   {
     "name": "id",
     "type": "INTEGER",
-    "mode": "REQUIRED"
+    "mode": "NULLABLE"
   },
   {
     "name": "name",
     "type": "STRING",
-    "mode": "REQUIRED"
+    "mode": "NULLABLE"
   },
   {
     "name": "email",
